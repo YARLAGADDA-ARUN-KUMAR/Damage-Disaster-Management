@@ -300,3 +300,4 @@ if __name__ == "__main__":
         threshold=args.threshold,
         use_tta=not args.no_tta,
     )
+
