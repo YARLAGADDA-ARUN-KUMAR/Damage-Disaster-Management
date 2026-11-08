@@ -104,5 +104,28 @@ If you prefer an interactive Jupyter environment:
 | `2` | `minor-damage` | Water-surrounded, partially missing shingles, minor exterior debris |
 | `3` | `major-damage` | Partial structural collapse, missing roof, significant damage |
 | `4` | `destroyed` | Complete collapse, leveled structure, roof and walls destroyed |
-| `255` | `ignored` | Unclassified buildings excluded from loss and evaluation |
+### Benchmark Results on Untouched Test Set (933 Tiles)
+
+| Model Architecture | Training Epochs | Localization F1 ($F1_{\text{loc}}$) | Damage Macro F1 ($F1_{\text{dmg}}$) | Destroyed F1 | Minor Damage F1 | Official xView2 Score |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: |
+| Single-Stage ResNet-34 Baseline | 20 | 0.6120 | 0.3700 | 0.5410 | 0.1008 | 0.4430 |
+| Dual-Head Siamese U-Net (Initial) | 20 | 0.7432 | 0.6294 | 0.7015 | 0.4109 | 0.6635 |
+| **Dual-Head Siamese U-Net (Fine-Tuned)** | **31** | **0.7588** | **0.6556** | **0.7102** | **0.4385** | **0.6866** |
+| **Dual-Head Siamese U-Net + TTA + Calibrated** | **31** | **0.7652** | **0.6624** | **0.7173** | **0.4468** | **0.6932** |
+
+---
+
+## 5. Rapid Disaster Damage Assessment CLI
+
+Run single-tile or whole-event rapid damage assessment generating an executive 4-panel report dashboard:
+```powershell
+.venv\Scripts\python.exe -m src.predict --tile-id santa-rosa-wildfire_00000012
+```
+
+Outputs include:
+- Total building footprint pixel count
+- Intact vs. Minor vs. Major vs. Destroyed damage breakdown and damage ratio
+- Color-coded disaster severity categorization (`CATASTROPHIC`, `HIGH`, `MODERATE`, `LOW / MINIMAL`)
+- 4-panel executive dashboard saved to `outputs/assessment_<tile_id>.png`
+
 
