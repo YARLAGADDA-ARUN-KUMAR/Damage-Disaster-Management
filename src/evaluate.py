@@ -110,12 +110,18 @@ def plot_visual_samples(samples, save_path: Path):
 
 
 @torch.no_grad()
-def run_evaluation(checkpoint_path: Path, split: str = "test"):
+def run_evaluation(
+    checkpoint_path: Path,
+    split: str = "test",
+    threshold: float = 0.35,
+    use_tta: bool = True,
+):
     print("=" * 70)
     print("TERRASHIELD AI — EVALUATION PIPELINE")
     print("=" * 70)
-    print(f"Loading checkpoint: {checkpoint_path}")
-    print(f"Evaluation split: {split.upper()}")
+    print(f"Loading checkpoint : {checkpoint_path}")
+    print(f"Evaluation split   : {split.upper()}")
+    print(f"Localization Thresh: {threshold} | TTA: {use_tta}")
 
     # Dataloader
     _, hold_loader, test_loader = get_dataloaders()
@@ -138,7 +144,14 @@ def run_evaluation(checkpoint_path: Path, split: str = "test"):
         raw_tgt = batch["raw_target"].to(DEVICE, non_blocking=True)
 
         with torch.amp.autocast(device_type=DEVICE.type, enabled=USE_AMP, dtype=torch.float16):
-            final_pred, loc_probs, damage_probs = model.predict(pre_img, post_img)
+            if use_tta:
+                final_pred, loc_probs, damage_probs = model.predict_tta(
+                    pre_img, post_img, loc_threshold=threshold
+                )
+            else:
+                final_pred, loc_probs, damage_probs = model.predict(
+                    pre_img, post_img, loc_threshold=threshold
+                )
 
         confusion += compute_confusion_matrix(final_pred, raw_tgt)
 
@@ -204,7 +217,14 @@ if __name__ == "__main__":
         help="Path to model checkpoint",
     )
     parser.add_argument("--split", type=str, default="test", choices=["test", "hold"], help="Dataset split")
+    parser.add_argument("--threshold", type=float, default=0.35, help="Localization probability threshold")
+    parser.add_argument("--no-tta", action="store_true", help="Disable Test-Time Augmentation")
     args = parser.parse_args()
 
-    run_evaluation(checkpoint_path=Path(args.checkpoint), split=args.split)
+    run_evaluation(
+        checkpoint_path=Path(args.checkpoint),
+        split=args.split,
+        threshold=args.threshold,
+        use_tta=not args.no_tta,
+    )
 
