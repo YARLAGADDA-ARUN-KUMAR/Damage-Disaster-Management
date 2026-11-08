@@ -99,3 +99,4 @@ If you prefer an interactive Jupyter environment:
 | `3` | `major-damage` | Partial structural collapse, missing roof, significant damage |
 | `4` | `destroyed` | Complete collapse, leveled structure, roof and walls destroyed |
 | `255` | `ignored` | Unclassified buildings excluded from loss and evaluation |
+

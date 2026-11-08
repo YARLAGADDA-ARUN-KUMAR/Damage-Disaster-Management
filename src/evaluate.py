@@ -207,3 +207,4 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     run_evaluation(checkpoint_path=Path(args.checkpoint), split=args.split)
+

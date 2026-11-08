@@ -30,14 +30,16 @@ from src.metrics import calculate_metrics_from_confusion, compute_confusion_matr
 from src.model import DualHeadSiameseUNet
 
 
-def train_one_epoch(model, loader, criterion, optimizer, scaler, device):
+def train_one_epoch(model, loader, criterion, optimizer, scaler, device, max_batches=None):
     model.train()
     total_loss = 0.0
     total_loc_loss = 0.0
     total_dmg_loss = 0.0
 
     pbar = tqdm(loader, desc="Training", leave=False)
-    for batch in pbar:
+    for step, batch in enumerate(pbar):
+        if max_batches is not None and step >= max_batches:
+            break
         pre_img = batch["pre_image"].to(device, non_blocking=True)
         post_img = batch["post_image"].to(device, non_blocking=True)
         loc_tgt = batch["loc_target"].to(device, non_blocking=True)
@@ -66,22 +68,24 @@ def train_one_epoch(model, loader, criterion, optimizer, scaler, device):
             dmg=f"{loss_dict['loss_dmg'].item():.3f}",
         )
 
-    num_batches = len(loader)
+    num_batches = step + 1 if max_batches is not None else len(loader)
     return {
-        "loss": total_loss / num_batches,
-        "loc_loss": total_loc_loss / num_batches,
-        "dmg_loss": total_dmg_loss / num_batches,
+        "loss": total_loss / max(num_batches, 1),
+        "loc_loss": total_loc_loss / max(num_batches, 1),
+        "dmg_loss": total_dmg_loss / max(num_batches, 1),
     }
 
 
 @torch.no_grad()
-def evaluate_one_epoch(model, loader, criterion, device):
+def evaluate_one_epoch(model, loader, criterion, device, max_batches=None):
     model.eval()
     total_loss = 0.0
     confusion = np.zeros((5, 5), dtype=np.int64)
 
     pbar = tqdm(loader, desc="Validation", leave=False)
-    for batch in pbar:
+    for step, batch in enumerate(pbar):
+        if max_batches is not None and step >= max_batches:
+            break
         pre_img = batch["pre_image"].to(device, non_blocking=True)
         post_img = batch["post_image"].to(device, non_blocking=True)
         loc_tgt = batch["loc_target"].to(device, non_blocking=True)
@@ -101,7 +105,8 @@ def evaluate_one_epoch(model, loader, criterion, device):
         confusion += compute_confusion_matrix(final_pred, raw_tgt)
 
     metrics = calculate_metrics_from_confusion(confusion)
-    metrics["val_loss"] = total_loss / len(loader)
+    num_eval = step + 1 if max_batches is not None else len(loader)
+    metrics["val_loss"] = total_loss / max(num_eval, 1)
     return metrics
 
 
@@ -284,3 +289,4 @@ if __name__ == "__main__":
         weight_decay=args.weight_decay,
         patience=args.patience,
     )
+

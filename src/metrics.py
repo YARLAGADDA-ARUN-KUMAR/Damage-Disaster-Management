@@ -97,3 +97,4 @@ def calculate_metrics_from_confusion(confusion: np.ndarray) -> dict:
         "fg_macro_f1": fg_macro_f1,
         "xview2_score": float(xview2_score),
     }
+

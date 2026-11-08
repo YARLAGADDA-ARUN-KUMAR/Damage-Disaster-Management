@@ -125,3 +125,4 @@ class DualHeadLoss(nn.Module):
             "dice_loc": dice_loc,
             "loss_dmg": loss_dmg,
         }
+

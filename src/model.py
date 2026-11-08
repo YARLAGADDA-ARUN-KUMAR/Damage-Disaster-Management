@@ -157,3 +157,4 @@ class DualHeadSiameseUNet(nn.Module):
 
         final_mask = torch.where(is_building, damage_preds, torch.zeros_like(damage_preds))
         return final_mask, loc_probs, damage_probs
+
