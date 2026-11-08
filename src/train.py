@@ -155,6 +155,7 @@ def run_training(
     lr: float = DEFAULT_LR,
     weight_decay: float = DEFAULT_WEIGHT_DECAY,
     patience: int = DEFAULT_PATIENCE,
+    resume: str = None,
 ):
     print("=" * 70)
     print("TERRASHIELD AI — DUAL-HEAD TRAINING PIPELINE")
@@ -202,10 +203,31 @@ def run_training(
     best_score = -1.0
     best_epoch = 0
     patience_counter = 0
+    start_epoch = 1
+
+    if resume:
+        ckpt_path = Path(resume)
+        if ckpt_path.exists():
+            print(f"\nResuming training from checkpoint: {ckpt_path}")
+            checkpoint = torch.load(ckpt_path, map_location=DEVICE, weights_only=False)
+            model.load_state_dict(checkpoint["model_state_dict"])
+            if "optimizer_state_dict" in checkpoint:
+                optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+                for g in optimizer.param_groups:
+                    g["lr"] = lr
+            if "scaler_state_dict" in checkpoint:
+                scaler.load_state_dict(checkpoint["scaler_state_dict"])
+            if "history" in checkpoint and isinstance(checkpoint["history"], dict):
+                history = checkpoint["history"]
+            if "best_score" in checkpoint:
+                best_score = checkpoint["best_score"]
+            start_epoch = checkpoint.get("epoch", 0) + 1
+            best_epoch = checkpoint.get("epoch", 0)
+            print(f"Loaded successfully. Resuming from Epoch {start_epoch} with initial best score: {best_score:.4f}")
 
     start_time = time.time()
 
-    for epoch in range(1, epochs + 1):
+    for epoch in range(start_epoch, epochs + 1):
         t0 = time.time()
         print(f"\n--- Epoch {epoch}/{epochs} ---")
 
@@ -280,6 +302,7 @@ if __name__ == "__main__":
     parser.add_argument("--lr", type=float, default=DEFAULT_LR, help="Initial learning rate")
     parser.add_argument("--weight-decay", type=float, default=DEFAULT_WEIGHT_DECAY, help="Weight decay")
     parser.add_argument("--patience", type=int, default=DEFAULT_PATIENCE, help="Early stopping patience")
+    parser.add_argument("--resume", type=str, default=None, help="Path to checkpoint to resume training from")
     args = parser.parse_args()
 
     run_training(
@@ -288,5 +311,6 @@ if __name__ == "__main__":
         lr=args.lr,
         weight_decay=args.weight_decay,
         patience=args.patience,
+        resume=args.resume,
     )
 

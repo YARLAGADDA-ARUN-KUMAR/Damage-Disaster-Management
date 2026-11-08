@@ -158,3 +158,38 @@ class DualHeadSiameseUNet(nn.Module):
         final_mask = torch.where(is_building, damage_preds, torch.zeros_like(damage_preds))
         return final_mask, loc_probs, damage_probs
 
+    @torch.no_grad()
+    def predict_tta(self, pre_image: torch.Tensor, post_image: torch.Tensor, loc_threshold: float = 0.42):
+        """
+        Test-Time Augmentation (TTA) inference:
+        Averages multi-temporal predictions across original, horizontal flip, and vertical flip.
+        Significantly reduces boundary jitter and improves corner damage consistency.
+        """
+        # 1. Standard orientation
+        loc_l1, dmg_l1 = self.forward(pre_image, post_image)
+        loc_p = torch.sigmoid(loc_l1)
+        dmg_p = torch.softmax(dmg_l1, dim=1)
+
+        # 2. Horizontal flip
+        pre_h = torch.flip(pre_image, dims=[3])
+        post_h = torch.flip(post_image, dims=[3])
+        loc_l2, dmg_l2 = self.forward(pre_h, post_h)
+        loc_p += torch.flip(torch.sigmoid(loc_l2), dims=[3])
+        dmg_p += torch.flip(torch.softmax(dmg_l2, dim=1), dims=[3])
+
+        # 3. Vertical flip
+        pre_v = torch.flip(pre_image, dims=[2])
+        post_v = torch.flip(post_image, dims=[2])
+        loc_l3, dmg_l3 = self.forward(pre_v, post_v)
+        loc_p += torch.flip(torch.sigmoid(loc_l3), dims=[2])
+        dmg_p += torch.flip(torch.softmax(dmg_l3, dim=1), dims=[2])
+
+        loc_probs = (loc_p / 3.0).squeeze(1)
+        dmg_probs = dmg_p / 3.0
+
+        is_building = loc_probs >= loc_threshold
+        damage_preds = torch.argmax(dmg_probs, dim=1) + 1
+
+        final_mask = torch.where(is_building, damage_preds, torch.zeros_like(damage_preds))
+        return final_mask, loc_probs, dmg_probs
+

@@ -59,8 +59,14 @@ Train the Dual-Head Siamese U-Net using mixed precision (AMP):
 ```
 Checkpoints will be saved automatically to `checkpoints/dual_head_siamese_best.pth`.
 
+### Resuming & Fine-Tuning
+Resume training from an existing checkpoint with a fine-tuning learning rate (e.g. up to 35 epochs):
+```powershell
+.venv\Scripts\python.exe -m src.train --epochs 35 --lr 5e-5 --resume checkpoints/dual_head_siamese_best.pth
+```
+
 ### Evaluating on the Test Split
-Run evaluation on the test set (933 satellite tiles) and generate diagnostic confusion matrices:
+Run evaluation on the test set (933 satellite tiles) with calibrated threshold and optional TTA:
 ```powershell
 .venv\Scripts\python.exe -m src.evaluate --checkpoint checkpoints/dual_head_siamese_best.pth --split test
 ```
