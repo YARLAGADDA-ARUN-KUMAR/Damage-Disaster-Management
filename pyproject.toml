@@ -1,0 +1,27 @@
+[project]
+name = "terrashield-ai"
+version = "0.1.0"
+description = "AI-powered satellite disaster damage assessment"
+requires-python = ">=3.13,<3.14"
+dependencies = [
+    "matplotlib>=3.11.2",
+    "pandas>=3.1.0",
+    "rasterio>=1.5.2",
+    "shapely>=2.2.0",
+    "torch==2.7.1",
+    "torchvision>=0.22.1",
+    "tqdm>=4.66.5",
+]
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu126" }
+
+[[tool.uv.index]]
+name = "pytorch-cu126"
+url = "https://download.pytorch.org/whl/cu126"
+
+[dependency-groups]
+dev = [
+    "ipykernel>=7.4.0",
+    "jupyter>=1.1.1",
+]
