@@ -156,28 +156,27 @@ def run_training(
     weight_decay: float = DEFAULT_WEIGHT_DECAY,
     patience: int = DEFAULT_PATIENCE,
     resume: str = None,
+    backbone: str = "resnet34",
 ):
     print("=" * 70)
     print("TERRASHIELD AI — DUAL-HEAD TRAINING PIPELINE")
     print("=" * 70)
     print(f"Device: {DEVICE} ({torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'CPU'})")
+    print(f"Backbone: {backbone.upper()}")
     print(f"Batch size: {batch_size} (512x512 building-guided crops)")
     print(f"Learning rate: {lr} | Weight decay: {weight_decay}")
     print(f"Max epochs: {epochs} | Early stopping patience: {patience}")
     print(f"Checkpoints: {CHECKPOINT_ROOT}")
 
-    # Set seeds
     torch.manual_seed(RANDOM_STATE)
     np.random.seed(RANDOM_STATE)
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(RANDOM_STATE)
 
-    # Load data
     train_loader, hold_loader, _ = get_dataloaders(batch_size=batch_size)
     print(f"Train samples: {len(train_loader.dataset)} | Holdout samples: {len(hold_loader.dataset)}")
 
-    # Initialize model, loss, optimizer, scheduler
-    model = DualHeadSiameseUNet(pretrained=True).to(DEVICE)
+    model = DualHeadSiameseUNet(backbone=backbone, pretrained=True).to(DEVICE)
     criterion = DualHeadLoss().to(DEVICE)
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
@@ -185,9 +184,10 @@ def run_training(
     )
     scaler = torch.amp.GradScaler(DEVICE.type, enabled=USE_AMP)
 
-    best_checkpoint_path = CHECKPOINT_ROOT / "dual_head_siamese_best.pth"
-    latest_checkpoint_path = CHECKPOINT_ROOT / "dual_head_siamese_latest.pth"
-    history_plot_path = OUTPUT_ROOT / "dual_head_training_history.png"
+    tag = "siamese" if backbone == "resnet34" else f"efficientnet_b2"
+    best_checkpoint_path = CHECKPOINT_ROOT / f"dual_head_{tag}_best.pth"
+    latest_checkpoint_path = CHECKPOINT_ROOT / f"dual_head_{tag}_latest.pth"
+    history_plot_path = OUTPUT_ROOT / f"dual_head_{tag}_training_history.png"
 
     history = {
         "epoch": [],
@@ -303,6 +303,7 @@ if __name__ == "__main__":
     parser.add_argument("--weight-decay", type=float, default=DEFAULT_WEIGHT_DECAY, help="Weight decay")
     parser.add_argument("--patience", type=int, default=DEFAULT_PATIENCE, help="Early stopping patience")
     parser.add_argument("--resume", type=str, default=None, help="Path to checkpoint to resume training from")
+    parser.add_argument("--backbone", type=str, default="resnet34", choices=["resnet34", "efficientnet_b2"], help="Encoder backbone architecture")
     args = parser.parse_args()
 
     run_training(
@@ -312,5 +313,6 @@ if __name__ == "__main__":
         weight_decay=args.weight_decay,
         patience=args.patience,
         resume=args.resume,
+        backbone=args.backbone,
     )
 

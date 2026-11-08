@@ -23,7 +23,7 @@ from src.config import (
 )
 from src.dataset import get_dataloaders
 from src.metrics import calculate_metrics_from_confusion, compute_confusion_matrix
-from src.model import DualHeadSiameseUNet
+from src.model import DualHeadSiameseUNet, EnsembleDualHeadModel
 
 
 def plot_confusion_matrix(confusion: np.ndarray, save_path: Path):
@@ -115,24 +115,43 @@ def run_evaluation(
     split: str = "test",
     threshold: float = 0.35,
     use_tta: bool = True,
+    backbone: str = "resnet34",
+    ensemble: bool = False,
+    majority_vote: bool = False,
 ):
     print("=" * 70)
     print("TERRASHIELD AI — EVALUATION PIPELINE")
     print("=" * 70)
-    print(f"Loading checkpoint : {checkpoint_path}")
+    print(f"Evaluation mode    : {'ENSEMBLE (ResNet-34 + EfficientNet-B2)' if ensemble else f'SINGLE MODEL ({backbone.upper()})'}")
     print(f"Evaluation split   : {split.upper()}")
-    print(f"Localization Thresh: {threshold} | TTA: {use_tta}")
+    print(f"Localization Thresh: {threshold} | TTA: {use_tta} | Majority Voting: {majority_vote}")
 
-    # Dataloader
     _, hold_loader, test_loader = get_dataloaders()
     loader = test_loader if split == "test" else hold_loader
 
-    # Load model
-    model = DualHeadSiameseUNet(pretrained=False).to(DEVICE)
-    ckpt = torch.load(checkpoint_path, map_location=DEVICE, weights_only=False)
-    state_dict = ckpt["model_state_dict"] if "model_state_dict" in ckpt else ckpt
-    model.load_state_dict(state_dict)
-    model.eval()
+    if ensemble:
+        m1 = DualHeadSiameseUNet(backbone="resnet34", pretrained=False).to(DEVICE)
+        ckpt1_path = CHECKPOINT_ROOT / "dual_head_siamese_best.pth"
+        c1 = torch.load(ckpt1_path, map_location=DEVICE, weights_only=False)
+        m1.load_state_dict(c1["model_state_dict"] if "model_state_dict" in c1 else c1)
+
+        m2 = DualHeadSiameseUNet(backbone="efficientnet_b2", pretrained=False).to(DEVICE)
+        ckpt2_path = CHECKPOINT_ROOT / "dual_head_efficientnet_b2_best.pth"
+        if not ckpt2_path.exists():
+            ckpt2_path = checkpoint_path
+        c2 = torch.load(ckpt2_path, map_location=DEVICE, weights_only=False)
+        m2.load_state_dict(c2["model_state_dict"] if "model_state_dict" in c2 else c2)
+
+        model = EnsembleDualHeadModel([m1, m2]).eval()
+    else:
+        model = DualHeadSiameseUNet(backbone=backbone, pretrained=False).to(DEVICE)
+        ckpt = torch.load(checkpoint_path, map_location=DEVICE, weights_only=False)
+        state_dict = ckpt["model_state_dict"] if "model_state_dict" in ckpt else ckpt
+        model.load_state_dict(state_dict)
+        model.eval()
+
+    if majority_vote:
+        from src.vectorize import vectorize_predictions
 
     confusion = np.zeros((NUM_TOTAL_CLASSES, NUM_TOTAL_CLASSES), dtype=np.int64)
     visual_samples = []
@@ -152,6 +171,13 @@ def run_evaluation(
                 final_pred, loc_probs, damage_probs = model.predict(
                     pre_img, post_img, loc_threshold=threshold
                 )
+
+        if majority_vote:
+            pred_np = final_pred[0].cpu().numpy()
+            loc_np = (loc_probs[0].cpu().numpy() >= threshold).astype(np.uint8)
+            dmg_np = damage_probs[0].cpu().numpy()
+            voted_np, _ = vectorize_predictions(loc_np, dmg_np, min_area=15)
+            final_pred = torch.from_numpy(voted_np).unsqueeze(0).to(DEVICE)
 
         confusion += compute_confusion_matrix(final_pred, raw_tgt)
 
@@ -219,6 +245,9 @@ if __name__ == "__main__":
     parser.add_argument("--split", type=str, default="test", choices=["test", "hold"], help="Dataset split")
     parser.add_argument("--threshold", type=float, default=0.35, help="Localization probability threshold")
     parser.add_argument("--no-tta", action="store_true", help="Disable Test-Time Augmentation")
+    parser.add_argument("--backbone", type=str, default="resnet34", choices=["resnet34", "efficientnet_b2"], help="Model backbone")
+    parser.add_argument("--ensemble", action="store_true", help="Evaluate ensemble of ResNet-34 and EfficientNet-B2")
+    parser.add_argument("--majority-vote", action="store_true", help="Apply building-level majority voting")
     args = parser.parse_args()
 
     run_evaluation(
@@ -226,5 +255,8 @@ if __name__ == "__main__":
         split=args.split,
         threshold=args.threshold,
         use_tta=not args.no_tta,
+        backbone=args.backbone,
+        ensemble=args.ensemble,
+        majority_vote=args.majority_vote,
     )
 

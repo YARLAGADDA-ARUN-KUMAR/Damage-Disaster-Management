@@ -155,3 +155,4 @@ def export_geojson(
         json.dump(geojson_data, f, indent=2)
 
     return output_path
+

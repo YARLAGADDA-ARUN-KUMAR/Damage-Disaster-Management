@@ -19,7 +19,7 @@ from src.config import (
     DAMAGE_CLASS_WEIGHTS,
 )
 from src.dataset import build_split_dataframe, DualHeadXView2Dataset, get_dataloaders
-from src.model import DualHeadSiameseUNet
+from src.model import DualHeadSiameseUNet, EnsembleDualHeadModel
 from src.loss import DualHeadLoss
 from src.metrics import compute_confusion_matrix, calculate_metrics_from_confusion
 from src.vectorize import (
@@ -57,34 +57,33 @@ def test_dataset_and_normalization():
 
 
 def test_model_forward_backward():
-    print("\n--- Test 2: Model Forward & Backward Pass ---")
-    model = DualHeadSiameseUNet(pretrained=False).to(DEVICE)
-    model.train()
+    print("\n--- Test 2: Model Forward & Backward Pass (ResNet-34 & EfficientNet-B2) ---")
+    for backbone in ["resnet34", "efficientnet_b2"]:
+        model = DualHeadSiameseUNet(backbone=backbone, pretrained=False).to(DEVICE)
+        model.train()
 
-    pre = torch.randn(2, 3, 512, 512, device=DEVICE)
-    post = torch.randn(2, 3, 512, 512, device=DEVICE)
+        pre = torch.randn(2, 3, 512, 512, device=DEVICE)
+        post = torch.randn(2, 3, 512, 512, device=DEVICE)
 
-    loc_logits, dmg_logits = model(pre, post)
-    assert loc_logits.shape == (2, 1, 512, 512), f"Unexpected loc logits shape: {loc_logits.shape}"
-    assert dmg_logits.shape == (2, 4, 512, 512), f"Unexpected dmg logits shape: {dmg_logits.shape}"
-    print(f"[PASSED] Forward pass logits: Loc={loc_logits.shape}, Dmg={dmg_logits.shape}")
+        loc_logits, dmg_logits = model(pre, post)
+        assert loc_logits.shape == (2, 1, 512, 512), f"Unexpected loc logits shape for {backbone}"
+        assert dmg_logits.shape == (2, 4, 512, 512), f"Unexpected dmg logits shape for {backbone}"
 
-    # Loss
-    criterion = DualHeadLoss().to(DEVICE)
-    loc_tgt = torch.randint(0, 2, (2, 512, 512), device=DEVICE, dtype=torch.float32)
-    dmg_tgt = torch.randint(0, 4, (2, 512, 512), device=DEVICE, dtype=torch.long)
+        criterion = DualHeadLoss().to(DEVICE)
+        loc_tgt = torch.randint(0, 2, (2, 512, 512), device=DEVICE, dtype=torch.float32)
+        dmg_tgt = torch.randint(0, 4, (2, 512, 512), device=DEVICE, dtype=torch.long)
 
-    loss_dict = criterion(loc_logits, dmg_logits, loc_tgt, dmg_tgt)
-    total_loss = loss_dict["total_loss"]
-    assert torch.isfinite(total_loss), f"Loss is not finite: {total_loss}"
+        loss_dict = criterion(loc_logits, dmg_logits, loc_tgt, dmg_tgt)
+        total_loss = loss_dict["total_loss"]
+        assert torch.isfinite(total_loss), f"Loss is not finite for {backbone}"
 
-    total_loss.backward()
-    for name, param in model.named_parameters():
-        if param.requires_grad:
-            assert param.grad is not None, f"Missing gradient for {name}"
-            assert torch.isfinite(param.grad).all(), f"Non-finite gradient in {name}"
+        total_loss.backward()
+        for name, param in model.named_parameters():
+            if param.requires_grad:
+                assert param.grad is not None, f"Missing gradient in {backbone} for {name}"
+                assert torch.isfinite(param.grad).all(), f"Non-finite gradient in {backbone} for {name}"
 
-    print(f"[PASSED] Loss: {total_loss.item():.4f} with clean gradients across all parameters.")
+        print(f"[PASSED] {backbone.upper()} forward/backward pass verified (loss: {total_loss.item():.4f}).")
 
 
 def test_predict_and_metrics():
@@ -114,7 +113,15 @@ def test_predict_and_metrics():
     assert "fg_macro_f1" in metrics
     assert "xview2_score" in metrics
     assert 0.0 <= metrics["xview2_score"] <= 1.0
-    print(f"[PASSED] Metrics computation verified (xView2 Score: {metrics['xview2_score']:.4f}).")
+
+    # Ensemble test
+    m_eff = DualHeadSiameseUNet(backbone="efficientnet_b2", pretrained=False).to(DEVICE)
+    ens = EnsembleDualHeadModel([model, m_eff])
+    ens_pred, ens_loc_p, ens_dmg_p = ens.predict(pre, post)
+    assert ens_pred.shape == (2, 512, 512)
+    assert ens_loc_p.shape == (2, 512, 512)
+    assert ens_dmg_p.shape == (2, 4, 512, 512)
+    print(f"[PASSED] Ensemble inference verified (xView2 Score: {metrics['xview2_score']:.4f}).")
 
 
 def test_vectorize_and_majority_voting():
