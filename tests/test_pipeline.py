@@ -22,6 +22,12 @@ from src.dataset import build_split_dataframe, DualHeadXView2Dataset, get_datalo
 from src.model import DualHeadSiameseUNet
 from src.loss import DualHeadLoss
 from src.metrics import compute_confusion_matrix, calculate_metrics_from_confusion
+from src.vectorize import (
+    classify_existing_polygons,
+    export_geojson,
+    majority_vote_damage,
+    vectorize_predictions,
+)
 
 
 def test_dataset_and_normalization():
@@ -111,6 +117,31 @@ def test_predict_and_metrics():
     print(f"[PASSED] Metrics computation verified (xView2 Score: {metrics['xview2_score']:.4f}).")
 
 
+def test_vectorize_and_majority_voting():
+    print("\n--- Test 4: Object Vectorization & Majority Voting ---")
+    labeled_mask = np.zeros((100, 100), dtype=np.int32)
+    labeled_mask[10:30, 10:30] = 1
+    labeled_mask[60:80, 60:80] = 2
+
+    damage_probs = np.zeros((4, 100, 100), dtype=np.float32)
+    damage_probs[0, 10:30, 10:30] = 0.95
+    damage_probs[3, 60:80, 60:80] = 0.90
+
+    voted_mask, best_classes, best_confs, areas = majority_vote_damage(labeled_mask, damage_probs)
+    assert voted_mask.shape == (100, 100)
+    assert best_classes[0] == 1
+    assert best_classes[1] == 4
+    assert np.all(voted_mask[10:30, 10:30] == 1)
+    assert np.all(voted_mask[60:80, 60:80] == 4)
+
+    loc_mask = (labeled_mask > 0).astype(np.uint8)
+    clean_mask, features = vectorize_predictions(loc_mask, damage_probs, min_area=10)
+    assert len(features) == 2
+    assert features[0]["properties"]["damage_class"] == "no-damage"
+    assert features[1]["properties"]["damage_class"] == "destroyed"
+    print(f"[PASSED] Vectorized {len(features)} buildings with majority voting.")
+
+
 if __name__ == "__main__":
     print("=" * 60)
     print("RUNNING TERRASHIELD AI PIPELINE TESTS")
@@ -118,6 +149,7 @@ if __name__ == "__main__":
     test_dataset_and_normalization()
     test_model_forward_backward()
     test_predict_and_metrics()
+    test_vectorize_and_majority_voting()
     print("\n" + "=" * 60)
     print("ALL TESTS PASSED SUCCESSFULLY!")
     print("=" * 60)

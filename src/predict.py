@@ -209,6 +209,7 @@ def run_prediction(
     output_path: Path = None,
     threshold: float = 0.35,
     use_tta: bool = True,
+    export_geojson_file: bool = False,
 ):
     print("=" * 70)
     print("TERRASHIELD AI — RAPID DISASTER DAMAGE ASSESSMENT")
@@ -222,40 +223,39 @@ def run_prediction(
     if output_path is None:
         output_path = OUTPUT_ROOT / f"assessment_{tile_name}.png"
 
-    # 1. Load model
     model = DualHeadSiameseUNet(pretrained=False).to(DEVICE)
     ckpt = torch.load(checkpoint_path, map_location=DEVICE, weights_only=False)
     state = ckpt["model_state_dict"] if "model_state_dict" in ckpt else ckpt
     model.load_state_dict(state)
     model.eval()
 
-    # 2. Preprocess images
     pre_np, pre_t = load_and_preprocess_image(pre_path)
     post_np, post_t = load_and_preprocess_image(post_path)
 
     pre_t = pre_t.to(DEVICE)
     post_t = post_t.to(DEVICE)
 
-    # 3. Model Inference
     with torch.no_grad():
         with torch.amp.autocast(device_type=DEVICE.type, enabled=USE_AMP, dtype=torch.float16):
             if use_tta:
-                pred_mask, _, _ = model.predict_tta(pre_t, post_t, loc_threshold=threshold)
+                pred_mask, loc_probs, dmg_probs = model.predict_tta(pre_t, post_t, loc_threshold=threshold)
             else:
-                pred_mask, _, _ = model.predict(pre_t, post_t, loc_threshold=threshold)
+                pred_mask, loc_probs, dmg_probs = model.predict(pre_t, post_t, loc_threshold=threshold)
 
     pred_mask_np = pred_mask[0].cpu().numpy()
 
-    # 4. Generate damage statistics
+    if export_geojson_file:
+        from src.vectorize import export_geojson as save_geojson, vectorize_predictions
+        loc_m = (loc_probs[0].cpu().numpy() >= threshold).astype(np.uint8)
+        dmg_p = dmg_probs[0].cpu().numpy()
+        pred_mask_np, features = vectorize_predictions(loc_m, dmg_p, min_area=15)
+        geojson_path = output_path.with_suffix(".geojson")
+        save_geojson(features, geojson_path, metadata={"tile": tile_name, "buildings": len(features)})
+
     stats = calculate_damage_statistics(pred_mask_np)
-
-    # 5. Generate visual overlay
     overlay_np = create_damage_overlay(post_np, pred_mask_np)
-
-    # 6. Save executive dashboard
     plot_executive_dashboard(pre_np, post_np, overlay_np, stats, output_path, tile_name)
 
-    # 7. Print formatted terminal summary
     print("\n" + "=" * 70)
     print("ASSESSMENT SUMMARY")
     print("=" * 70)
@@ -268,6 +268,8 @@ def run_prediction(
     print(f"Damage Ratio         : {stats['damage_ratio']:.1f}%")
     print(f"Severity Assessment  : {stats['severity']}")
     print(f"Dashboard Saved To   : {output_path}")
+    if export_geojson_file:
+        print(f"GeoJSON Saved To     : {output_path.with_suffix('.geojson')} ({len(features)} buildings)")
     print("=" * 70)
 
 
@@ -280,6 +282,7 @@ if __name__ == "__main__":
     parser.add_argument("--output", type=str, default=None, help="Path to save assessment visualization")
     parser.add_argument("--threshold", type=float, default=0.35, help="Localization probability threshold")
     parser.add_argument("--no-tta", action="store_true", help="Disable Test-Time Augmentation")
+    parser.add_argument("--export-geojson", action="store_true", help="Export building vector polygons as GeoJSON")
     args = parser.parse_args()
 
     if args.tile_id:
@@ -299,5 +302,6 @@ if __name__ == "__main__":
         output_path=out_p,
         threshold=args.threshold,
         use_tta=not args.no_tta,
+        export_geojson_file=args.export_geojson,
     )
 
