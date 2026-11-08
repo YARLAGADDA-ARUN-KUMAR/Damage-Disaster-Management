@@ -38,57 +38,27 @@ Post-Disaster Image [3x512x512] ──► [Shared ResNet-34 Encoder] ──► [
 
 ---
 
-## 2. Tutorials: Quickstart
+## 2. Notebook Execution Guide
 
-### Prerequisites & Environment
-Ensure PyTorch and CUDA dependencies are installed:
-```powershell
-uv sync
-```
+The entire end-to-end pipeline is structured into 6 sequential, fully self-contained Jupyter notebooks:
 
-### Running the Test Suite
-Verify model forward/backward passes, dataloaders, and metric calculations:
-```powershell
-.venv\Scripts\python.exe tests/test_pipeline.py
-```
-
-### Training the Model
-Train the Dual-Head Siamese U-Net using mixed precision (AMP):
-```powershell
-.venv\Scripts\python.exe -m src.train --epochs 20 --batch-size 4 --lr 2e-4
-```
-Checkpoints will be saved automatically to `checkpoints/dual_head_siamese_best.pth`.
-
-### Resuming & Fine-Tuning
-Resume training from an existing checkpoint with a fine-tuning learning rate (e.g. up to 35 epochs):
-```powershell
-.venv\Scripts\python.exe -m src.train --epochs 35 --lr 5e-5 --resume checkpoints/dual_head_siamese_best.pth
-```
-
-### Evaluating on the Test Split
-Run evaluation on the test set (933 satellite tiles) with calibrated threshold and optional TTA:
-```powershell
-.venv\Scripts\python.exe -m src.evaluate --checkpoint checkpoints/dual_head_siamese_best.pth --split test
-```
+1. **[`01_dataset_understanding.ipynb`](file:///d:/ML_Project/notebooks/01_dataset_understanding.ipynb):**
+   - File hierarchy inspection, satellite metadata parsing, and polygon annotation verification.
+2. **[`02_exploratory_data_analysis.ipynb`](file:///d:/ML_Project/notebooks/02_exploratory_data_analysis.ipynb):**
+   - Spectral band distribution, building area histograms, and disaster-specific damage ratios.
+3. **[`03_data_preprocessing.ipynb`](file:///d:/ML_Project/notebooks/03_data_preprocessing.ipynb):**
+   - WKT polygon rasterization into pixel target masks (`processed/targets/`) and unclassified building mask caching.
+4. **[`04_model_development.ipynb`](file:///d:/ML_Project/notebooks/04_model_development.ipynb):**
+   - Single-stage baseline experiments (01–04) analysis and diagnostic failure retrospective.
+5. **[`05_model_training.ipynb`](file:///d:/ML_Project/notebooks/05_model_training.ipynb):**
+   - Interactive training of the Dual-Head Siamese U-Net with mixed precision (AMP) and guided building cropping.
+   - Saves model checkpoints to `checkpoints/dual_head_siamese_best.pth`.
+6. **[`06_model_evaluation.ipynb`](file:///d:/ML_Project/notebooks/06_model_evaluation.ipynb):**
+   - Test set evaluation on 933 untouched tiles, threshold calibration, multi-angle Test-Time Augmentation (TTA), normalized confusion matrices, and side-by-side visual damage overlays.
 
 ---
 
-## 3. How-To Guides: Interactive Notebooks
-
-If you prefer an interactive Jupyter environment:
-
-1. **Dataset Exploration & Preprocessing:**
-   - [`01_dataset_understanding.ipynb`](file:///d:/ML_Project/notebooks/01_dataset_understanding.ipynb): File structure, polygon annotations, and class distributions.
-   - [`02_exploratory_data_analysis.ipynb`](file:///d:/ML_Project/notebooks/02_exploratory_data_analysis.ipynb): Spectral analysis, building sizes, and regional disaster heatmaps.
-   - [`03_data_preprocessing.ipynb`](file:///d:/ML_Project/notebooks/03_data_preprocessing.ipynb): Target rasterization and caching unclassified building ignore masks.
-2. **Model Training & Evaluation:**
-   - [`04_model_development.ipynb`](file:///d:/ML_Project/notebooks/04_model_development.ipynb): Baseline experiments (01–04) analysis and diagnostic retrospective.
-   - [`05_model_training.ipynb`](file:///d:/ML_Project/notebooks/05_model_training.ipynb): Interactive training of the Dual-Head architecture with real-time loss, F1, and xView2 score curves.
-   - [`06_model_evaluation.ipynb`](file:///d:/ML_Project/notebooks/06_model_evaluation.ipynb): Test set evaluation, normalized confusion matrices, and qualitative side-by-side visual comparisons.
-
----
-
-## 4. Reference
+## 3. Reference
 
 ### Evaluation Metrics
 - **Localization F1 ($F1_{\text{loc}}$):** Harmonic mean of building detection precision and recall.
@@ -104,6 +74,7 @@ If you prefer an interactive Jupyter environment:
 | `2` | `minor-damage` | Water-surrounded, partially missing shingles, minor exterior debris |
 | `3` | `major-damage` | Partial structural collapse, missing roof, significant damage |
 | `4` | `destroyed` | Complete collapse, leveled structure, roof and walls destroyed |
+
 ### Benchmark Results on Untouched Test Set (933 Tiles)
 
 | Model Architecture | Training Epochs | Localization F1 ($F1_{\text{loc}}$) | Damage Macro F1 ($F1_{\text{dmg}}$) | Destroyed F1 | Minor Damage F1 | Official xView2 Score |
@@ -112,20 +83,5 @@ If you prefer an interactive Jupyter environment:
 | Dual-Head Siamese U-Net (Initial) | 20 | 0.7432 | 0.6294 | 0.7015 | 0.4109 | 0.6635 |
 | **Dual-Head Siamese U-Net (Fine-Tuned)** | **31** | **0.7588** | **0.6556** | **0.7102** | **0.4385** | **0.6866** |
 | **Dual-Head Siamese U-Net + TTA + Calibrated** | **31** | **0.7652** | **0.6624** | **0.7173** | **0.4468** | **0.6932** |
-
----
-
-## 5. Rapid Disaster Damage Assessment CLI
-
-Run single-tile or whole-event rapid damage assessment generating an executive 4-panel report dashboard:
-```powershell
-.venv\Scripts\python.exe -m src.predict --tile-id santa-rosa-wildfire_00000012
-```
-
-Outputs include:
-- Total building footprint pixel count
-- Intact vs. Minor vs. Major vs. Destroyed damage breakdown and damage ratio
-- Color-coded disaster severity categorization (`CATASTROPHIC`, `HIGH`, `MODERATE`, `LOW / MINIMAL`)
-- 4-panel executive dashboard saved to `outputs/assessment_<tile_id>.png`
 
 
