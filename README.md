@@ -51,10 +51,10 @@ The entire end-to-end pipeline is structured into 6 sequential, fully self-conta
 4. **[`04_model_development.ipynb`](file:///d:/ML_Project/notebooks/04_model_development.ipynb):**
    - Single-stage baseline experiments (01–04) analysis and diagnostic failure retrospective.
 5. **[`05_model_training.ipynb`](file:///d:/ML_Project/notebooks/05_model_training.ipynb):**
-   - Interactive training of the Dual-Head Siamese U-Net with mixed precision (AMP) and guided building cropping.
-   - Saves model checkpoints to `checkpoints/dual_head_siamese_best.pth`.
+   - Interactive training of both the **ResNet-34** and **EfficientNet-B2** Dual-Head Siamese U-Nets with mixed precision (AMP) and guided building cropping.
+   - Saves model checkpoints to `checkpoints/dual_head_siamese_best.pth` and `checkpoints/dual_head_efficientnet_b2_best.pth`.
 6. **[`06_model_evaluation.ipynb`](file:///d:/ML_Project/notebooks/06_model_evaluation.ipynb):**
-   - Test set evaluation on 933 untouched tiles, threshold calibration, multi-angle Test-Time Augmentation (TTA), normalized confusion matrices, and side-by-side visual damage overlays.
+   - Complete evaluation suite on 933 untouched test tiles: threshold calibration, multi-angle TTA, multi-backbone ensembling (ResNet-34 + EfficientNet-B2), object-level polygon vectorization (GeoJSON export), and polygon-guided cadastre evaluation.
 
 ---
 
@@ -81,7 +81,9 @@ The entire end-to-end pipeline is structured into 6 sequential, fully self-conta
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
 | Single-Stage ResNet-34 Baseline | 20 | 0.6120 | 0.3700 | 0.5410 | 0.1008 | 0.4430 |
 | Dual-Head Siamese U-Net (Initial) | 20 | 0.7432 | 0.6294 | 0.7015 | 0.4109 | 0.6635 |
-| **Dual-Head Siamese U-Net (Fine-Tuned)** | **31** | **0.7588** | **0.6556** | **0.7102** | **0.4385** | **0.6866** |
-| **Dual-Head Siamese U-Net + TTA + Calibrated** | **31** | **0.7652** | **0.6624** | **0.7173** | **0.4468** | **0.6932** |
+| Dual-Head Siamese U-Net (Fine-Tuned) | 31 | 0.7588 | 0.6556 | 0.7102 | 0.4385 | 0.6866 |
+| Dual-Head Siamese U-Net + TTA + Calibrated | 31 | 0.7652 | 0.6624 | 0.7173 | 0.4468 | 0.6932 |
+| **Multi-Backbone Ensemble (ResNet-34 + EfficientNet-B2)** | **31 / 26** | **0.8487** | **0.6716** | **0.7209** | **0.4810** | **0.7247** |
+| **Polygon-Guided Cadastre (Dataset Footprints Given)** | **31** | **1.0000** | **0.7667** | **0.8501** | **0.5432** | **0.8367** |
 
 
